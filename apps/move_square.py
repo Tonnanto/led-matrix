@@ -1,6 +1,7 @@
 import numpy as np
 
 from apps.app import App
+from displays.color import Colors
 from displays.display import Display
 from events.event import EventProvider, Event
 
@@ -19,7 +20,7 @@ class MoveSquare(App):
 
         if self.needs_redraw:
             color_matrix = np.zeros((self.display.height, self.display.width, 3))
-            color_matrix[self.square_pos[1]][self.square_pos[0]] = np.array((255, 0, 255))
+            color_matrix[self.square_pos[1]][self.square_pos[0]] = Colors.RED
 
             self.display.draw(np.array(color_matrix))
             self.needs_redraw = False
