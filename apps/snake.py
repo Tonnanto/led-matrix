@@ -1,8 +1,7 @@
 import time
-from enum import Enum
+from enum import IntEnum
 from random import randrange
 
-import numpy
 import numpy as np
 
 from apps.app import App
@@ -12,14 +11,16 @@ from events.event import EventProvider, Event
 from PIL import Image, ImageDraw, ImageFont
 
 
-class SnakeDirection(Enum):
-    RIGHT = 1
-    LEFT = 2
-    UP = 3
-    DOWN = 4
+class SnakeDirection(IntEnum):
+    RIGHT = 0
+    LEFT = 1
+    UP = 2
+    DOWN = 3
 
 
 class SnakeApp(App):
+
+    HIGH_SCORE = 128  # Bot
 
     def __init__(self, event_provider: EventProvider, display: Display):
         super().__init__(event_provider, display)
@@ -28,24 +29,31 @@ class SnakeApp(App):
         self.snake_pos = [(0, 0)]
         self.snake_color = Colors.GREEN
         self.snake_head_color = np.array((0, 120, 120))
-        self.snake_delay = 0.1
+        self.snake_delay = 0
         self.timestamp = time.time()
         self.food_pos = None
         self.food_color = Colors.RED
         self.game_over = False  # True
-        # self.pending_moves = []
+        self.pending_moves = []
+        self.snake_bot = True
 
     def tick(self):
 
         if self.game_over:
+            if self.score > SnakeApp.HIGH_SCORE:
+                SnakeApp.HIGH_SCORE = self.score
             self.game_over_sequence()
+            self.restart()
 
         elif time.time() - self.timestamp > self.snake_delay:
-            self.move()
-            self.draw_snake()
 
             if self.food_pos is None:
                 self.spawn_food()
+
+            self.change_direction()
+            self.move()
+
+            self.draw_snake()
 
             self.timestamp = time.time()
 
@@ -59,15 +67,76 @@ class SnakeApp(App):
 
         self.display.draw(np.array(color_matrix))
 
+    def change_direction(self):
+        if self.snake_bot:
+            self.bot_direction()
+
+        if len(self.pending_moves) > 0:
+            self.snake_direction = self.pending_moves.pop()
+
     def move(self):
+        new_pos = self.adjacent_pos(self.snake_direction)
+
+        self.snake_pos.insert(0, new_pos)
+
+        if new_pos == self.food_pos:
+            # eat food
+            self.food_pos = None
+            self.score += 1
+
+        elif new_pos in self.snake_pos[1:]:
+            # eat self -> game over
+            self.game_over = True
+
+        else:
+            # continue
+            del self.snake_pos[-1]
+
+    def on_event(self, event: Event):
+        super().on_event(event)
+        if event == Event.UP and self.snake_direction is not SnakeDirection.DOWN:
+            self.pending_moves.append(SnakeDirection.UP)
+        if event == Event.DOWN and self.snake_direction is not SnakeDirection.UP:
+            self.pending_moves.append(SnakeDirection.DOWN)
+        if event == Event.RIGHT and self.snake_direction is not SnakeDirection.LEFT:
+            self.pending_moves.append(SnakeDirection.RIGHT)
+        if event == Event.LEFT and self.snake_direction is not SnakeDirection.RIGHT:
+            self.pending_moves.append(SnakeDirection.LEFT)
+        self.pending_moves.append(event)
+
+    def bot_direction(self):
+        snake_pos = self.snake_pos[0]
+        food_pos = self.food_pos
+
+        new_direction = self.snake_direction
+
+        # if snake_pos[0] is not food_pos[0]:
+        if snake_pos[0] - food_pos[0] > 0 and self.snake_direction is not SnakeDirection.RIGHT:
+            new_direction = SnakeDirection.LEFT
+        elif snake_pos[0] - food_pos[0] < 0 and self.snake_direction is not SnakeDirection.LEFT:
+            new_direction = SnakeDirection.RIGHT
+
+        # if snake_pos[1] is not food_pos[1]:
+        elif snake_pos[1] - food_pos[1] > 0 and self.snake_direction is not SnakeDirection.DOWN:
+            new_direction = SnakeDirection.UP
+        elif snake_pos[1] - food_pos[1] < 0 and self.snake_direction is not SnakeDirection.UP:
+            new_direction = SnakeDirection.DOWN
+
+        i = 0
+        while self.adjacent_pos(new_direction) in self.snake_pos:
+            new_direction = ((new_direction + 1) % 4)
+            i += 1
+            if i >= 4:
+                break
+
+        self.pending_moves.append(new_direction)
+
+    # returns the position next to the snake head in the given direction
+    def adjacent_pos(self, direction):
         assert len(self.snake_pos) > 0
 
         x = None
         y = None
-
-        direction = self.snake_direction
-        # if len(self.pending_moves) > 0:
-        #     direction = self.direction_from_event(self.pending_moves.pop())
 
         if direction == SnakeDirection.RIGHT:
             x = self.snake_pos[0][0] + 1
@@ -84,42 +153,7 @@ class SnakeApp(App):
 
         x %= self.display.width
         y %= self.display.height
-        new_pos = (x, y)
-
-        self.snake_pos.insert(0, new_pos)
-
-        if new_pos == self.food_pos:
-            # eat food
-            self.food_pos = None
-            self.score += 1
-
-        elif new_pos in self.snake_pos[1:]:
-            print(new_pos)
-            print(self.snake_pos)
-            # eat self -> game over
-            self.game_over = True
-
-        else:
-            # continue
-            del self.snake_pos[-1]
-
-    def on_event(self, event: Event):
-        super().on_event(event)
-        # if len(self.pending_moves) > 0:
-        #     self.pending_moves.append(event)
-        #     return
-
-        self.change_direction(event)
-
-    def change_direction(self, event: Event):
-        if event == Event.UP and self.snake_direction is not SnakeDirection.DOWN:
-            self.snake_direction = SnakeDirection.UP
-        if event == Event.DOWN and self.snake_direction is not SnakeDirection.UP:
-            self.snake_direction = SnakeDirection.DOWN
-        if event == Event.RIGHT and self.snake_direction is not SnakeDirection.LEFT:
-            self.snake_direction = SnakeDirection.RIGHT
-        if event == Event.LEFT and self.snake_direction is not SnakeDirection.RIGHT:
-            self.snake_direction = SnakeDirection.LEFT
+        return x, y
 
     def spawn_food(self):
         assert self.food_pos is None
@@ -132,11 +166,16 @@ class SnakeApp(App):
 
         self.food_pos = (x, y)
 
+    def restart(self):
+        self.score = 0
+        self.snake_pos = [(0, 0)]
+        self.game_over = False
+
     def game_over_sequence(self):
         text = f'Score: {self.score}'
         # img = Image.new('RGB', (self.display.width, self.display.height))
 
-        font = ImageFont.truetype("arialbd.ttf", 14)
+        font = ImageFont.truetype("arialbd.ttf", 10)
 
         w, h = font.getsize(text)
         h *= 2
@@ -169,3 +208,6 @@ class SnakeApp(App):
                 color_matrix[y][x] = (255, 0, 0) if display_matrix[y][x] else (0, 0, 0)
 
         self.display.draw(np.array(color_matrix))
+        print(f'Score: {self.score}')
+        print(f'High Score: {SnakeApp.HIGH_SCORE}')
+        # time.sleep(1)
