@@ -1,4 +1,5 @@
 from apps.move_square import MoveSquare
+from apps.snake import SnakeApp
 from displays.pygame_display import PyGameDisplay
 
 from events.event import KeyboardEventProvider
@@ -12,7 +13,7 @@ running = True
 # Components
 event_provider = KeyboardEventProvider()
 display = PyGameDisplay(64, 32)
-app = MoveSquare(event_provider, display)
+app = SnakeApp(event_provider, display)
 
 
 def mainloop():
