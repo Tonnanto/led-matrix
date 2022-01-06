@@ -20,7 +20,7 @@ class SnakeDirection(IntEnum):
 
 class SnakeApp(App):
 
-    HIGH_SCORE = 128  # Bot
+    HIGH_SCORE = 122  # Bot
 
     def __init__(self, event_provider: EventProvider, display: Display):
         super().__init__(event_provider, display)
